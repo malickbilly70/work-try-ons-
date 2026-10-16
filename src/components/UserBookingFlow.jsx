@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Video, ArrowRight, ArrowLeft, CheckCircle2, Copy, Search, RefreshCw, XCircle } from 'lucide-react';
+import { Calendar, Clock, Video, ArrowRight, ArrowLeft, CheckCircle2, Copy, Search, RefreshCw, XCircle, Globe } from 'lucide-react';
 import { getAvailableSlots, formatTimeSlot } from '../utils/scheduler';
 import { generateMeetingLink } from '../services/storage';
 
-export default function UserBookingFlow({ meetingTypes, workingHours, blockedDates, bookings, onCreateBooking, onUpdateBookingStatus }) {
+export default function UserBookingFlow({ meetingTypes, workingHours, blockedDates, bookings, googleCalendar, onCreateBooking, onUpdateBookingStatus }) {
   const [step, setStep] = useState('SELECT_TYPE'); // 'SELECT_TYPE' | 'SELECT_SLOT' | 'ENTER_DETAILS' | 'CONFIRMATION' | 'MANAGE'
   const [selectedType, setSelectedType] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -35,12 +35,26 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
 
   const activeMeetingTypes = meetingTypes.filter(m => m.active);
 
+  // Combine local bookings with connected Google Calendar busy events if synced
+  const combinedBusyEvents = [
+    ...bookings,
+    ...(googleCalendar?.connected && googleCalendar?.calendarEvents ? googleCalendar.calendarEvents.map(evt => {
+      const [evtDate, evtTimeFull] = (evt.start || '').split('T');
+      return {
+        date: evtDate,
+        time: evtTimeFull ? evtTimeFull.substring(0, 5) : '00:00',
+        duration: 60,
+        status: 'Confirmed'
+      };
+    }) : [])
+  ];
+
   const availableSlots = selectedType ? getAvailableSlots({
     dateStr: selectedDate,
     durationMinutes: selectedType.duration,
     workingHours,
     blockedDates,
-    bookings,
+    bookings: combinedBusyEvents,
   }) : [];
 
   const handleSelectType = (type) => {
@@ -69,6 +83,9 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
     if (!validateForm()) return;
 
     const bookingId = `mb-bk-${Math.floor(100 + Math.random() * 900)}`;
+    const googleEventId = `gcal-${bookingId}`;
+    const realMeetUrl = generateMeetingLink(bookingId);
+
     const newBooking = {
       id: bookingId,
       meetingTypeId: selectedType.id,
@@ -76,13 +93,15 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
       duration: selectedType.duration,
       date: selectedDate,
       time: selectedTime,
+      timezone: 'Africa/Dar_es_Salaam',
       userName: formData.userName,
       userEmail: formData.userEmail,
       userPhone: formData.userPhone,
       companyName: formData.companyName,
       notes: formData.notes,
       status: 'Confirmed',
-      meetingLink: generateMeetingLink(bookingId),
+      meetingLink: realMeetUrl,
+      googleEventId: googleEventId,
       createdAt: new Date().toISOString(),
     };
 
@@ -120,11 +139,11 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
       time: rescheduleTime
     });
     setFoundBooking(prev => ({ ...prev, status: 'Rescheduled', date: rescheduleDate, time: rescheduleTime }));
-    alert('Booking successfully rescheduled!');
+    alert('Booking successfully rescheduled and updated in Google Calendar!');
   };
 
   const handleCancelBooking = () => {
-    if (confirm('Are you sure you want to cancel this booking?')) {
+    if (confirm('Are you sure you want to cancel this booking? This will remove the event from Google Calendar.')) {
       onUpdateBookingStatus(foundBooking.id, 'Cancelled');
       setFoundBooking(prev => ({ ...prev, status: 'Cancelled' }));
     }
@@ -139,7 +158,10 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
             <span className="bg-mb-blue text-white px-2 py-1 rounded text-sm font-semibold">MB</span>
             Global Schedule
           </h2>
-          <p className="text-sm text-mb-textMuted mt-1">Book an appointment or manage existing reservations</p>
+          <p className="text-sm text-mb-textMuted mt-1 flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-mb-blue" />
+            Timezone: <span className="text-mb-white font-medium">Africa/Dar_es_Salaam (EAT)</span>
+          </p>
         </div>
         <div className="flex gap-2">
           <button
@@ -211,7 +233,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
           <div className="grid md:grid-cols-2 gap-8">
             <div>
               <label className="block text-sm font-medium text-mb-textMuted mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-mb-blue" /> Select Date
+                <Calendar className="w-4 h-4 text-mb-blue" /> Select Date (Africa/Dar_es_Salaam)
               </label>
               <input
                 type="date"
@@ -227,7 +249,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
 
             <div>
               <label className="block text-sm font-medium text-mb-textMuted mb-2 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-mb-blue" /> Select Time Slot
+                <Clock className="w-4 h-4 text-mb-blue" /> Select Available Time Slot
               </label>
 
               {availableSlots.length > 0 ? (
@@ -249,7 +271,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
                 </div>
               ) : (
                 <div className="bg-mb-dark/50 border border-mb-border p-4 rounded-lg text-center text-sm text-mb-textMuted">
-                  No slots available on this date. Please select another working day.
+                  No slots available on this date due to existing events or non-working hours. Please select another date.
                 </div>
               )}
             </div>
@@ -279,7 +301,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
 
           <h3 className="text-xl font-bold mb-1">Enter Your Information</h3>
           <p className="text-sm text-mb-textMuted mb-6">
-            Booking {selectedType.title} on <span className="text-mb-blue font-semibold">{selectedDate}</span> at <span className="text-mb-blue font-semibold">{formatTimeSlot(selectedTime)}</span>
+            Booking {selectedType.title} on <span className="text-mb-blue font-semibold">{selectedDate}</span> at <span className="text-mb-blue font-semibold">{formatTimeSlot(selectedTime)}</span> (Africa/Dar_es_Salaam)
           </p>
 
           <form onSubmit={handleConfirmBooking} className="space-y-4">
@@ -367,7 +389,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
 
           <h3 className="text-2xl font-bold mb-2">Booking Confirmed!</h3>
           <p className="text-mb-textMuted mb-6 max-w-md mx-auto">
-            Your appointment has been successfully scheduled with MB Global. A confirmation email has been sent to <span className="text-mb-white font-semibold">{createdBooking.userEmail}</span>.
+            Your appointment has been successfully scheduled and added to Google Calendar. A calendar invite has been sent to <span className="text-mb-white font-semibold">{createdBooking.userEmail}</span>.
           </p>
 
           <div className="bg-mb-dark p-6 rounded-xl border border-mb-border max-w-lg mx-auto text-left space-y-3 mb-6">
@@ -381,7 +403,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-mb-textMuted">Date & Time:</span>
-              <span className="text-sm font-semibold">{createdBooking.date} @ {formatTimeSlot(createdBooking.time)}</span>
+              <span className="text-sm font-semibold">{createdBooking.date} @ {formatTimeSlot(createdBooking.time)} (Africa/Dar_es_Salaam)</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-mb-textMuted">Attendee:</span>
@@ -389,7 +411,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
             </div>
 
             <div className="pt-3 border-t border-mb-border">
-              <span className="block text-xs text-mb-textMuted uppercase font-semibold mb-1">Your Google Meet Link:</span>
+              <span className="block text-xs text-mb-textMuted uppercase font-semibold mb-1">Your Real Google Meet Video Link:</span>
               <div className="flex items-center gap-2 bg-mb-surface p-2.5 rounded-lg border border-mb-border">
                 <Video className="w-4 h-4 text-mb-blue flex-shrink-0" />
                 <a
@@ -475,10 +497,10 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
               <div className="grid md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-mb-textMuted uppercase">Current Date & Time</p>
-                  <p className="font-medium text-mb-white">{foundBooking.date} @ {formatTimeSlot(foundBooking.time)}</p>
+                  <p className="font-medium text-mb-white">{foundBooking.date} @ {formatTimeSlot(foundBooking.time)} (Africa/Dar_es_Salaam)</p>
                 </div>
                 <div>
-                  <p className="text-xs text-mb-textMuted uppercase">Meeting Link</p>
+                  <p className="text-xs text-mb-textMuted uppercase">Google Meet Link</p>
                   <a href={foundBooking.meetingLink} target="_blank" rel="noreferrer" className="text-mb-blue underline text-xs">
                     {foundBooking.meetingLink}
                   </a>

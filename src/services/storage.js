@@ -1,4 +1,4 @@
-// Initial Seed Data and LocalStorage Manager for MB Global Appointment System
+// Data Models and Storage Manager for MB Global Appointment System
 
 export const INITIAL_MEETING_TYPES = [
   {
@@ -31,7 +31,7 @@ export const INITIAL_MEETING_TYPES = [
 ];
 
 export const INITIAL_WORKING_HOURS = {
-  timezone: 'America/New_York',
+  timezone: 'Africa/Dar_es_Salaam',
   days: {
     monday: { enabled: true, start: '09:00', end: '17:00' },
     tuesday: { enabled: true, start: '09:00', end: '17:00' },
@@ -59,11 +59,23 @@ export const INITIAL_BLOCKED_DATES = [
 
 export const INITIAL_GOOGLE_CALENDAR = {
   connected: true,
-  accountEmail: 'appointments@mbglobal.com',
+  accountEmail: 'admin@mbglobal.com',
   primaryCalendarId: 'primary',
   autoAddMeetLink: true,
   syncStatus: 'synced', // 'synced' | 'syncing' | 'error' | 'disconnected'
   lastSyncedAt: new Date().toISOString(),
+  accessToken: 'mock_google_access_token_secure',
+  refreshToken: 'mock_google_refresh_token_secure',
+  tokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+  calendarEvents: [
+    {
+      id: 'gcal-evt-901',
+      summary: 'Internal Strategy Alignment',
+      start: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T11:00:00',
+      end: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T12:00:00',
+      timezone: 'Africa/Dar_es_Salaam'
+    }
+  ]
 };
 
 export const INITIAL_BOOKINGS = [
@@ -74,13 +86,15 @@ export const INITIAL_BOOKINGS = [
     duration: 30,
     date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
     time: '10:00',
+    timezone: 'Africa/Dar_es_Salaam',
     userName: 'John Doe',
     userEmail: 'john.doe@acme.corp',
     userPhone: '+1 (555) 234-5678',
     companyName: 'Acme Corp',
-    notes: 'Looking forward to discussing our Q3 expansion strategy.',
+    notes: 'Looking forward to discussing our expansion strategy in Africa/Dar_es_Salaam.',
     status: 'Confirmed', // 'Confirmed' | 'Rescheduled' | 'Cancelled' | 'Completed'
     meetingLink: 'https://meet.google.com/mbg-strat-101',
+    googleEventId: 'gcal-mb-bk-101',
     createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
   },
   {
@@ -90,6 +104,7 @@ export const INITIAL_BOOKINGS = [
     duration: 60,
     date: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0], // Day after tomorrow
     time: '14:00',
+    timezone: 'Africa/Dar_es_Salaam',
     userName: 'Sarah Jenkins',
     userEmail: 's.jenkins@innovate.io',
     userPhone: '+1 (555) 987-6543',
@@ -97,6 +112,7 @@ export const INITIAL_BOOKINGS = [
     notes: 'API integration security compliance review.',
     status: 'Confirmed',
     meetingLink: 'https://meet.google.com/mbg-tech-102',
+    googleEventId: 'gcal-mb-bk-102',
     createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
   }
 ];
