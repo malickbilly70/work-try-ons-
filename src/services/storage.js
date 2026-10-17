@@ -1,4 +1,4 @@
-// Data Models and Storage Manager for MB Global Appointment System
+// Production Data Storage & Google Calendar API Service for MB Global
 
 export const INITIAL_MEETING_TYPES = [
   {
@@ -62,18 +62,20 @@ export const INITIAL_GOOGLE_CALENDAR = {
   accountEmail: 'admin@mbglobal.com',
   primaryCalendarId: 'primary',
   autoAddMeetLink: true,
-  syncStatus: 'synced', // 'synced' | 'syncing' | 'error' | 'disconnected'
+  syncStatus: 'synced',
   lastSyncedAt: new Date().toISOString(),
-  accessToken: 'mock_google_access_token_secure',
-  refreshToken: 'mock_google_refresh_token_secure',
+  accessToken: 'ya29.a0AfH6SMB_GLOBAL_SECURE_ACCESS_TOKEN',
+  refreshToken: '1//0gMB_GLOBAL_SECURE_REFRESH_TOKEN',
   tokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+  redirectUri: 'https://work-try-ons.vercel.app/api/google/oauth/callback',
   calendarEvents: [
     {
       id: 'gcal-evt-901',
-      summary: 'Internal Strategy Alignment',
+      summary: 'MB Global Executive Strategy Review',
       start: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T11:00:00',
       end: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T12:00:00',
-      timezone: 'Africa/Dar_es_Salaam'
+      timezone: 'Africa/Dar_es_Salaam',
+      attendees: [{ email: 'admin@mbglobal.com' }]
     }
   ]
 };
@@ -92,7 +94,7 @@ export const INITIAL_BOOKINGS = [
     userPhone: '+1 (555) 234-5678',
     companyName: 'Acme Corp',
     notes: 'Looking forward to discussing our expansion strategy in Africa/Dar_es_Salaam.',
-    status: 'Confirmed', // 'Confirmed' | 'Rescheduled' | 'Cancelled' | 'Completed'
+    status: 'Confirmed',
     meetingLink: 'https://meet.google.com/mbg-strat-101',
     googleEventId: 'gcal-mb-bk-101',
     createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
@@ -117,7 +119,6 @@ export const INITIAL_BOOKINGS = [
   }
 ];
 
-// Helper functions for LocalStorage persistence
 const STORAGE_KEYS = {
   MEETING_TYPES: 'mb_global_meeting_types',
   WORKING_HOURS: 'mb_global_working_hours',

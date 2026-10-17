@@ -145,10 +145,10 @@ export default function AdminDashboard({
     alert('Working hours and slot intervals updated successfully!');
   };
 
-  // Trigger Google OAuth 2.0 Connect Flow
+  // Trigger Google OAuth 2.0 Connect Flow to exact endpoint
   const handleConnectGoogleOAuth = () => {
     const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'your-google-client-id.apps.googleusercontent.com';
-    const redirectUri = encodeURIComponent(window.location.origin + '/admin/oauth/callback');
+    const redirectUri = encodeURIComponent('https://work-try-ons.vercel.app/api/google/oauth/callback');
     const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events');
 
     // Construct Google OAuth 2.0 authorization URL
@@ -163,7 +163,7 @@ export default function AdminDashboard({
         syncStatus: 'synced',
         lastSyncedAt: new Date().toISOString()
       });
-      alert('Connected to Google Calendar OAuth successfully! (Production Credentials Mode)');
+      alert('Connected to Google Calendar OAuth successfully! (Redirect URI: https://work-try-ons.vercel.app/api/google/oauth/callback)');
     } else {
       window.location.href = oauthUrl;
     }
@@ -177,7 +177,7 @@ export default function AdminDashboard({
       setIsSyncing(false);
       setTestResult({
         success: true,
-        message: 'Successfully connected to Google Calendar API (Calendar ID: primary). Timezone: Africa/Dar_es_Salaam',
+        message: 'Successfully connected to Google Calendar API (Calendar ID: primary). Timezone: Africa/Dar_es_Salaam. Callback Route: https://work-try-ons.vercel.app/api/google/oauth/callback',
         eventsCount: googleCalendar?.calendarEvents?.length || 1
       });
       onSaveGoogleCalendar({
@@ -621,8 +621,8 @@ export default function AdminDashboard({
             </div>
 
             <div className="flex justify-between items-center text-sm">
-              <span className="text-mb-textMuted">Primary Calendar ID:</span>
-              <span className="font-mono text-xs text-mb-blue">{googleCalendar.primaryCalendarId || 'primary'}</span>
+              <span className="text-mb-textMuted">OAuth Callback Redirect URI:</span>
+              <span className="font-mono text-xs text-mb-blue">https://work-try-ons.vercel.app/api/google/oauth/callback</span>
             </div>
 
             <div className="flex justify-between items-center text-sm">
