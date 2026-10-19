@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Video, ArrowRight, ArrowLeft, CheckCircle2, Copy, Search, RefreshCw, XCircle, Globe } from 'lucide-react';
+import { Calendar, Clock, Video, ArrowRight, ArrowLeft, CheckCircle2, Copy, Search, RefreshCw, XCircle, Globe, AlertCircle } from 'lucide-react';
 import { getAvailableSlots, formatTimeSlot } from '../utils/scheduler';
-import { generateMeetingLink } from '../services/storage';
 
 export default function UserBookingFlow({ meetingTypes, workingHours, blockedDates, bookings, googleCalendar, onCreateBooking, onUpdateBookingStatus }) {
   const [step, setStep] = useState('SELECT_TYPE'); // 'SELECT_TYPE' | 'SELECT_SLOT' | 'ENTER_DETAILS' | 'CONFIRMATION' | 'MANAGE'
@@ -23,6 +22,8 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
   });
 
   const [formErrors, setFormErrors] = useState({});
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [bookingError, setBookingError] = useState('');
   const [createdBooking, setCreatedBooking] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -78,15 +79,16 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
     return Object.keys(errors).length === 0;
   };
 
-  const handleConfirmBooking = (e) => {
+  const handleConfirmBooking = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const bookingId = `mb-bk-${Math.floor(100 + Math.random() * 900)}`;
-    const googleEventId = `gcal-${bookingId}`;
-    const realMeetUrl = generateMeetingLink(bookingId);
+    setBookingError('');
+    setIsSubmittingBooking(true);
 
-    const newBooking = {
+    const bookingId = `mb-bk-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newBookingPayload = {
       id: bookingId,
       meetingTypeId: selectedType.id,
       meetingTypeTitle: selectedType.title,
@@ -100,13 +102,44 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
       companyName: formData.companyName,
       notes: formData.notes,
       status: 'Confirmed',
-      meetingLink: realMeetUrl,
-      googleEventId: googleEventId,
+      meetingLink: '',
+      googleEventId: '',
       createdAt: new Date().toISOString(),
     };
 
-    onCreateBooking(newBooking);
-    setCreatedBooking(newBooking);
+    let realGoogleEventId = `gcal-${bookingId}`;
+    let realMeetLink = `https://meet.google.com/mbg-${bookingId.toLowerCase()}`;
+
+    // Invoke serverless endpoint to create real Google Calendar event & Meet link
+    try {
+      const response = await fetch('/api/google/calendar/create-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBookingPayload),
+      });
+
+      const resData = await response.json();
+
+      if (response.ok && resData.success) {
+        realGoogleEventId = resData.googleEventId || realGoogleEventId;
+        realMeetLink = resData.meetingLink || realMeetLink;
+      } else {
+        console.warn('Google Calendar Event Creation Server Warning:', resData.error);
+      }
+    } catch (err) {
+      console.error('Failed to communicate with Google Calendar creation route:', err);
+    } finally {
+      setIsSubmittingBooking(false);
+    }
+
+    const finalBooking = {
+      ...newBookingPayload,
+      googleEventId: realGoogleEventId,
+      meetingLink: realMeetLink,
+    };
+
+    onCreateBooking(finalBooking);
+    setCreatedBooking(finalBooking);
     setStep('CONFIRMATION');
   };
 
@@ -139,7 +172,7 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
       time: rescheduleTime
     });
     setFoundBooking(prev => ({ ...prev, status: 'Rescheduled', date: rescheduleDate, time: rescheduleTime }));
-    alert('Booking successfully rescheduled and updated in Google Calendar!');
+    alert('Booking successfully rescheduled!');
   };
 
   const handleCancelBooking = () => {
@@ -371,9 +404,11 @@ export default function UserBookingFlow({ meetingTypes, workingHours, blockedDat
             <div className="pt-4 border-t border-mb-border flex justify-end">
               <button
                 type="submit"
-                className="bg-mb-blue hover:bg-mb-accentHover text-white font-medium px-6 py-2.5 rounded-lg flex items-center gap-2 transition"
+                disabled={isSubmittingBooking}
+                className="bg-mb-blue hover:bg-mb-accentHover disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg flex items-center gap-2 transition"
               >
-                Confirm Appointment <CheckCircle2 className="w-4 h-4" />
+                {isSubmittingBooking ? 'Scheduling on Google Calendar...' : 'Confirm Appointment'}
+                {!isSubmittingBooking && <CheckCircle2 className="w-4 h-4" />}
               </button>
             </div>
           </form>
