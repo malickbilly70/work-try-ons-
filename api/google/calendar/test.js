@@ -18,16 +18,29 @@ export default async function handler(req, res) {
 
     let accessToken = process.env.GOOGLE_ACCESS_TOKEN;
     let refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-    let accountEmail = 'admin@mbglobal.com';
+    let accountEmail = adminClaims.sub || 'admin@mbglobal.com';
 
     if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey);
-      const { data, error } = await supabase.from('admin_tokens').select('*').limit(1).single();
+      const { data, error } = await supabase
+        .from('admin_tokens')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
       if (data && !error) {
         accessToken = data.access_token;
         refreshToken = data.refresh_token;
         accountEmail = data.account_email;
       }
+    }
+
+    if (!accessToken && !refreshToken) {
+      return res.status(400).json({
+        connected: false,
+        error: 'No Google Calendar access or refresh token found for account in database.',
+      });
     }
 
     const oauth2Client = new google.auth.OAuth2(

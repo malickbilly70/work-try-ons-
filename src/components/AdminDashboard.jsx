@@ -16,7 +16,7 @@ export default function AdminDashboard({
   onUpdateBookingStatus,
   googleCalendar,
   onSaveGoogleCalendar,
-  adminToken,
+  isAdminAuthenticated,
   onAdminLogin,
   onAdminLogout,
 }) {
@@ -52,9 +52,9 @@ export default function AdminDashboard({
     accountEmail: null,
   });
 
-  // Fetch real Google OAuth connection status from backend when adminToken is present
+  // Fetch real Google OAuth connection status from backend when Admin is authenticated
   useEffect(() => {
-    if (adminToken) {
+    if (isAdminAuthenticated) {
       fetchServerConnectionStatus();
     } else {
       setServerConnection({
@@ -63,7 +63,7 @@ export default function AdminDashboard({
         accountEmail: null,
       });
     }
-  }, [adminToken]);
+  }, [isAdminAuthenticated]);
 
   const handlePasswordLogin = async (e) => {
     e.preventDefault();
@@ -74,13 +74,14 @@ export default function AdminDashboard({
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ password: loginPassword }),
       });
 
       const data = await response.json();
 
-      if (response.ok && data.authenticated && data.token) {
-        onAdminLogin(data.token);
+      if (response.ok && data.authenticated) {
+        onAdminLogin(data.email);
         setLoginPassword('');
       } else {
         setLoginError(data.error || 'Invalid administrator password.');
@@ -96,9 +97,7 @@ export default function AdminDashboard({
     try {
       setServerConnection(prev => ({ ...prev, loading: true }));
       const response = await fetch('/api/google/oauth/status', {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-        },
+        credentials: 'same-origin',
       });
 
       if (response.ok) {
@@ -133,10 +132,10 @@ export default function AdminDashboard({
     }
   };
 
-  // Trigger Google OAuth 2.0 Connect Flow via authenticated server route
+  // Trigger Google OAuth 2.0 Connect Flow via authenticated server route (relies on HttpOnly session cookie)
   const handleConnectGoogleOAuth = () => {
-    if (!adminToken) return;
-    window.location.href = `/api/google/oauth/start?admin_token=${encodeURIComponent(adminToken)}`;
+    if (!isAdminAuthenticated) return;
+    window.location.href = '/api/google/oauth/start';
   };
 
   // Disconnect Google OAuth via authenticated server route
@@ -145,9 +144,7 @@ export default function AdminDashboard({
     try {
       await fetch('/api/google/oauth/disconnect', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-        },
+        credentials: 'same-origin',
       });
     } catch (err) {
       console.error('Error sending disconnect request:', err);
@@ -279,9 +276,7 @@ export default function AdminDashboard({
 
     try {
       const response = await fetch('/api/google/calendar/test', {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-        },
+        credentials: 'same-origin',
       });
       const data = await response.json();
 
@@ -314,7 +309,7 @@ export default function AdminDashboard({
   };
 
   // Render Login Modal if Admin is not authenticated
-  if (!adminToken) {
+  if (!isAdminAuthenticated) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-mb-surface border border-mb-border rounded-2xl shadow-xl space-y-6">
         <div className="text-center space-y-2">
@@ -338,7 +333,7 @@ export default function AdminDashboard({
             <input
               type="password"
               required
-              placeholder="Enter password (default: mbglobal2026)"
+              placeholder="Enter administrator password"
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
               className="w-full bg-mb-dark border border-mb-border rounded-lg p-3 text-sm text-mb-white focus:outline-none focus:border-mb-blue"

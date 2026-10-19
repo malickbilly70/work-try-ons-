@@ -18,7 +18,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState('USER'); // 'USER' | 'ADMIN'
 
   // Admin Session State
-  const [adminToken, setAdminToken] = useState(() => localStorage.getItem('mb_admin_token') || null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => localStorage.getItem('mb_admin_authenticated') === 'true');
 
   // Persistent States
   const [meetingTypes, setMeetingTypes] = useState([]);
@@ -43,14 +43,14 @@ export default function App() {
     }
   }, []);
 
-  const handleAdminLogin = (token) => {
-    setAdminToken(token);
-    localStorage.setItem('mb_admin_token', token);
+  const handleAdminLogin = (email) => {
+    setIsAdminAuthenticated(true);
+    localStorage.setItem('mb_admin_authenticated', 'true');
   };
 
   const handleAdminLogout = () => {
-    setAdminToken(null);
-    localStorage.removeItem('mb_admin_token');
+    setIsAdminAuthenticated(false);
+    localStorage.removeItem('mb_admin_authenticated');
   };
 
   // Handlers for User Flow
@@ -152,7 +152,7 @@ export default function App() {
             onUpdateBookingStatus={handleUpdateBookingStatus}
             googleCalendar={googleCalendar}
             onSaveGoogleCalendar={handleSaveGoogleCalendar}
-            adminToken={adminToken}
+            isAdminAuthenticated={isAdminAuthenticated}
             onAdminLogin={handleAdminLogin}
             onAdminLogout={handleAdminLogout}
           />

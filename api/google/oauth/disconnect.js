@@ -23,11 +23,13 @@ export default async function handler(req, res) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    // Delete only authorized admin token records
+    // Delete only authorized admin token records belonging to the authorized sub/email if specified
+    const targetEmail = adminClaims.sub || 'admin@mbglobal.com';
+
     const { error } = await supabase
       .from('admin_tokens')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000');
+      .eq('account_email', targetEmail);
 
     if (error) {
       console.error('Error deleting admin tokens from database:', error.message || error);

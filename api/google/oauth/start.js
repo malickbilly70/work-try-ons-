@@ -13,11 +13,16 @@ export default async function handler(req, res) {
 
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.VITE_GOOGLE_REDIRECT_URI || 'https://work-try-ons.vercel.app/api/google/oauth/callback';
+
+    if (!clientId || !clientSecret) {
+      return res.status(500).json({ error: 'OAuth credentials not configured on server' });
+    }
 
     const oauth2Client = new google.auth.OAuth2(
       clientId,
-      process.env.GOOGLE_CLIENT_SECRET,
+      clientSecret,
       redirectUri
     );
 
