@@ -1,12 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
+import { authenticateAdminRequest } from '../../utils/auth.js';
 
 export default async function handler(req, res) {
+  // Enforce server-side admin authentication
+  const adminClaims = authenticateAdminRequest(req);
+  if (!adminClaims) {
+    return res.status(401).json({
+      connected: false,
+      error: 'Unauthorized: Admin authentication required',
+    });
+  }
+
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      return res.status(200).json({
+      return res.status(500).json({
         connected: false,
         accountEmail: null,
         error: 'Supabase credentials not configured on server',

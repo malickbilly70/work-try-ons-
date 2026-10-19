@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Trash2, Edit2, Clock, Calendar, Lock, Download, Check,
-  X, RefreshCw, CheckCircle2, AlertCircle, Link2, Search, Filter, Globe
+  X, RefreshCw, CheckCircle2, AlertCircle, Link2, Search, Filter, Shield, Globe, LogIn, LogOut
 } from 'lucide-react';
 import { formatTimeSlot } from '../utils/scheduler';
 
@@ -16,8 +16,16 @@ export default function AdminDashboard({
   onUpdateBookingStatus,
   googleCalendar,
   onSaveGoogleCalendar,
+  adminToken,
+  onAdminLogin,
+  onAdminLogout,
 }) {
   const [activeTab, setActiveTab] = useState('BOOKINGS'); // 'BOOKINGS' | 'TYPES' | 'HOURS' | 'BLOCKED' | 'GOOGLE'
+
+  // Admin password login state
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Search & Filter state for Bookings
   const [bookingSearch, setBookingSearch] = useState('');
@@ -44,15 +52,55 @@ export default function AdminDashboard({
     accountEmail: null,
   });
 
-  // Fetch real Google OAuth connection status from backend on mount and when google_connected query param is present
+  // Fetch real Google OAuth connection status from backend when adminToken is present
   useEffect(() => {
-    fetchServerConnectionStatus();
-  }, []);
+    if (adminToken) {
+      fetchServerConnectionStatus();
+    } else {
+      setServerConnection({
+        loading: false,
+        connected: false,
+        accountEmail: null,
+      });
+    }
+  }, [adminToken]);
+
+  const handlePasswordLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoggingIn(true);
+
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.authenticated && data.token) {
+        onAdminLogin(data.token);
+        setLoginPassword('');
+      } else {
+        setLoginError(data.error || 'Invalid administrator password.');
+      }
+    } catch (err) {
+      setLoginError('Failed to connect to authentication endpoint.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   const fetchServerConnectionStatus = async () => {
     try {
       setServerConnection(prev => ({ ...prev, loading: true }));
-      const response = await fetch('/api/google/oauth/status');
+      const response = await fetch('/api/google/oauth/status', {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+        },
+      });
+
       if (response.ok) {
         const data = await response.json();
         setServerConnection({
@@ -72,29 +120,35 @@ export default function AdminDashboard({
       } else {
         setServerConnection({
           loading: false,
-          connected: googleCalendar.connected,
-          accountEmail: googleCalendar.accountEmail,
+          connected: false,
+          accountEmail: null,
         });
       }
     } catch (err) {
       setServerConnection({
         loading: false,
-        connected: googleCalendar.connected,
-        accountEmail: googleCalendar.accountEmail,
+        connected: false,
+        accountEmail: null,
       });
     }
   };
 
-  // Trigger Google OAuth 2.0 Connect Flow via server route
+  // Trigger Google OAuth 2.0 Connect Flow via authenticated server route
   const handleConnectGoogleOAuth = () => {
-    window.location.href = '/api/google/oauth/start';
+    if (!adminToken) return;
+    window.location.href = `/api/google/oauth/start?admin_token=${encodeURIComponent(adminToken)}`;
   };
 
-  // Disconnect Google OAuth via server route
+  // Disconnect Google OAuth via authenticated server route
   const handleDisconnectGoogleOAuth = async () => {
     if (!confirm('Are you sure you want to disconnect Google Calendar?')) return;
     try {
-      await fetch('/api/google/oauth/disconnect', { method: 'POST' });
+      await fetch('/api/google/oauth/disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+        },
+      });
     } catch (err) {
       console.error('Error sending disconnect request:', err);
     } finally {
@@ -224,7 +278,11 @@ export default function AdminDashboard({
     setTestResult(null);
 
     try {
-      const response = await fetch('/api/google/calendar/test');
+      const response = await fetch('/api/google/calendar/test', {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+        },
+      });
       const data = await response.json();
 
       if (response.ok && data.connected) {
@@ -255,8 +313,53 @@ export default function AdminDashboard({
     }
   };
 
-  const isConnected = serverConnection.connected || googleCalendar.connected;
-  const currentEmail = serverConnection.accountEmail || googleCalendar.accountEmail || 'Not Connected';
+  // Render Login Modal if Admin is not authenticated
+  if (!adminToken) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 bg-mb-surface border border-mb-border rounded-2xl shadow-xl space-y-6">
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 bg-mb-blue/20 text-mb-blue rounded-xl flex items-center justify-center mx-auto border border-mb-blue/30">
+            <Shield className="w-6 h-6" />
+          </div>
+          <h2 className="text-2xl font-bold text-mb-white">Admin Authentication</h2>
+          <p className="text-xs text-mb-textMuted">Enter administrator password to access the MB Global Management Portal.</p>
+        </div>
+
+        {loginError && (
+          <div className="p-3 bg-red-950/50 border border-red-800 text-red-300 rounded-lg text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <span>{loginError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handlePasswordLogin} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase text-mb-textMuted mb-1">Admin Password</label>
+            <input
+              type="password"
+              required
+              placeholder="Enter password (default: mbglobal2026)"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              className="w-full bg-mb-dark border border-mb-border rounded-lg p-3 text-sm text-mb-white focus:outline-none focus:border-mb-blue"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoggingIn}
+            className="w-full bg-mb-blue hover:bg-mb-accentHover disabled:opacity-50 text-white font-semibold py-3 rounded-lg text-sm transition flex items-center justify-center gap-2"
+          >
+            <LogIn className="w-4 h-4" />
+            {isLoggingIn ? 'Authenticating...' : 'Sign In as Administrator'}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  const isConnected = serverConnection.connected;
+  const currentEmail = serverConnection.accountEmail || 'Not Connected';
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-4">
@@ -285,6 +388,12 @@ export default function AdminDashboard({
             className="bg-mb-surface hover:bg-mb-surfaceLight text-mb-textLight border border-mb-border px-3 py-2 rounded-lg text-xs font-medium transition flex items-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5 text-mb-blue" /> Export JSON
+          </button>
+          <button
+            onClick={onAdminLogout}
+            className="bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800 px-3 py-2 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ml-2"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Sign Out
           </button>
         </div>
       </div>

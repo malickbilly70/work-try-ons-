@@ -1,7 +1,17 @@
 import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateAdminRequest } from '../../utils/auth.js';
 
 export default async function handler(req, res) {
+  // Enforce server-side admin authentication
+  const adminClaims = authenticateAdminRequest(req);
+  if (!adminClaims) {
+    return res.status(401).json({
+      connected: false,
+      error: 'Unauthorized: Admin authentication required to test Google Calendar API',
+    });
+  }
+
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

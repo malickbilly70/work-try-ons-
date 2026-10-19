@@ -17,6 +17,9 @@ import {
 export default function App() {
   const [currentView, setCurrentView] = useState('USER'); // 'USER' | 'ADMIN'
 
+  // Admin Session State
+  const [adminToken, setAdminToken] = useState(() => localStorage.getItem('mb_admin_token') || null);
+
   // Persistent States
   const [meetingTypes, setMeetingTypes] = useState([]);
   const [workingHours, setWorkingHours] = useState(INITIAL_WORKING_HOURS);
@@ -39,6 +42,16 @@ export default function App() {
       setCurrentView('ADMIN');
     }
   }, []);
+
+  const handleAdminLogin = (token) => {
+    setAdminToken(token);
+    localStorage.setItem('mb_admin_token', token);
+  };
+
+  const handleAdminLogout = () => {
+    setAdminToken(null);
+    localStorage.removeItem('mb_admin_token');
+  };
 
   // Handlers for User Flow
   const handleCreateBooking = (newBooking) => {
@@ -139,6 +152,9 @@ export default function App() {
             onUpdateBookingStatus={handleUpdateBookingStatus}
             googleCalendar={googleCalendar}
             onSaveGoogleCalendar={handleSaveGoogleCalendar}
+            adminToken={adminToken}
+            onAdminLogin={handleAdminLogin}
+            onAdminLogout={handleAdminLogout}
           />
         )}
       </main>

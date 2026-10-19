@@ -1,8 +1,9 @@
 import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
+import { verifyOAuthState } from '../../utils/auth.js';
 
 export default async function handler(req, res) {
-  const { code, error: queryError } = req.query;
+  const { code, state, error: queryError } = req.query;
 
   if (queryError) {
     console.error('Google OAuth Access Denied:', queryError);
@@ -11,6 +12,15 @@ export default async function handler(req, res) {
 
   if (!code) {
     return res.status(400).json({ error: 'Missing authorization code parameter' });
+  }
+
+  // Step 1: Validate state parameter signature and binding
+  const statePayload = verifyOAuthState(state);
+  if (!statePayload) {
+    console.error('Invalid, expired, or unauthenticated OAuth state parameter');
+    return res.status(401).json({
+      error: 'Unauthorized: Invalid or expired OAuth state parameter',
+    });
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -29,7 +39,7 @@ export default async function handler(req, res) {
   );
 
   let tokens;
-  // Step 1: Exchange code for tokens separately
+  // Step 2: Exchange code for tokens separately
   try {
     const tokenResponse = await oauth2Client.getToken(code);
     tokens = tokenResponse.tokens;
@@ -43,8 +53,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Google OAuth token response missing access_token' });
   }
 
-  // Step 2: Fetch account email via UserInfo or ID Token claims
-  let accountEmail = 'admin@mbglobal.com';
+  // Step 3: Verify Google Account Identity via ID Token claims / UserInfo
+  let accountEmail = null;
   try {
     if (tokens.id_token) {
       const ticket = await oauth2Client.verifyIdToken({
@@ -63,32 +73,45 @@ export default async function handler(req, res) {
       }
     }
   } catch (userInfoError) {
-    console.error('Google UserInfo Fetch Warning (fallback used):', userInfoError.message || userInfoError);
+    console.error('Google UserInfo Fetch Error:', userInfoError.message || userInfoError);
+    return res.status(401).json({ error: 'Failed to verify Google identity' });
   }
 
-  // Step 3: Store credentials securely in Supabase admin_tokens
+  if (!accountEmail) {
+    return res.status(401).json({ error: 'Unverified Google account email' });
+  }
+
+  // Step 4: Mandatory persistence to Supabase database before returning success
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (supabaseUrl && supabaseKey) {
-    try {
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      const { error: dbError } = await supabase.from('admin_tokens').upsert({
-        account_email: accountEmail,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token || '',
-        expires_at: new Date(tokens.expiry_date || Date.now() + 3600000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'account_email' });
+  if (!supabaseUrl || !supabaseKey) {
+    return res.status(500).json({
+      error: 'Database credentials not configured. Token storage failed.',
+    });
+  }
 
-      if (dbError) {
-        console.error('Database token storage error:', dbError.message || dbError);
-        return res.status(500).json({ error: 'Failed to store OAuth credentials in database' });
-      }
-    } catch (supabaseError) {
-      console.error('Supabase connection error during token storage:', supabaseError.message || supabaseError);
-      return res.status(500).json({ error: 'Database service unavailable for storing OAuth tokens' });
+  try {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { error: dbError } = await supabase.from('admin_tokens').upsert({
+      account_email: accountEmail,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token || '',
+      expires_at: new Date(tokens.expiry_date || Date.now() + 3600000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'account_email' });
+
+    if (dbError) {
+      console.error('Database token storage error:', dbError.message || dbError);
+      return res.status(500).json({
+        error: 'Failed to persist OAuth credentials into database',
+      });
     }
+  } catch (supabaseError) {
+    console.error('Supabase connection error during token storage:', supabaseError.message || supabaseError);
+    return res.status(500).json({
+      error: 'Database connection failed during token persistence',
+    });
   }
 
   return res.redirect(302, 'https://work-try-ons.vercel.app?google_connected=true');

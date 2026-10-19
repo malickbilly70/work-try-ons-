@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
+import { authenticateAdminRequest } from '../../utils/auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed. Use POST or DELETE.' });
+  }
+
+  // Enforce server-side admin authentication
+  const adminClaims = authenticateAdminRequest(req);
+  if (!adminClaims) {
+    return res.status(401).json({
+      error: 'Unauthorized: Admin authentication required to disconnect Google Calendar',
+    });
   }
 
   try {
@@ -14,7 +23,11 @@ export default async function handler(req, res) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { error } = await supabase.from('admin_tokens').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Delete only authorized admin token records
+    const { error } = await supabase
+      .from('admin_tokens')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
 
     if (error) {
       console.error('Error deleting admin tokens from database:', error.message || error);

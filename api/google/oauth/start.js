@@ -1,6 +1,16 @@
 import { google } from 'googleapis';
+import { authenticateAdminRequest, generateOAuthState } from '../../utils/auth.js';
 
 export default async function handler(req, res) {
+  // Step 1: Enforce server-side admin authentication
+  const adminClaims = authenticateAdminRequest(req);
+
+  if (!adminClaims) {
+    return res.status(401).json({
+      error: 'Unauthorized: Admin authentication required to initiate Google OAuth flow',
+    });
+  }
+
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = process.env.VITE_GOOGLE_REDIRECT_URI || 'https://work-try-ons.vercel.app/api/google/oauth/callback';
@@ -11,9 +21,13 @@ export default async function handler(req, res) {
       redirectUri
     );
 
+    // Generate cryptographically signed state parameter bound to admin email
+    const state = generateOAuthState(adminClaims.sub || 'admin@mbglobal.com');
+
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
+      state,
       scope: [
         'openid',
         'email',
