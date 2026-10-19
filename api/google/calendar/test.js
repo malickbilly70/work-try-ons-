@@ -12,8 +12,8 @@ export default async function handler(req, res) {
 
     if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey);
-      const { data } = await supabase.from('admin_tokens').select('*').limit(1).single();
-      if (data) {
+      const { data, error } = await supabase.from('admin_tokens').select('*').limit(1).single();
+      if (data && !error) {
         accessToken = data.access_token;
         refreshToken = data.refresh_token;
         accountEmail = data.account_email;
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       lastSyncedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Google Calendar API test error:', error);
+    console.error('Google Calendar API test error:', error.message || error);
     return res.status(500).json({
       connected: false,
       error: error.message || 'Failed to connect to Google Calendar API',

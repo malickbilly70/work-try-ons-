@@ -15,15 +15,19 @@ export default async function handler(req, res) {
       access_type: 'offline',
       prompt: 'consent',
       scope: [
+        'openid',
+        'email',
+        'profile',
         'https://www.googleapis.com/auth/calendar',
         'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile',
       ],
     });
 
     return res.redirect(302, authUrl);
   } catch (error) {
-    console.error('Error generating Google OAuth URL:', error);
+    console.error('Error generating Google OAuth URL:', error.message || error);
     return res.status(500).json({ error: 'Failed to initiate Google OAuth flow' });
   }
 }
