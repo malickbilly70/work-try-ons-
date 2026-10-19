@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Shield, Globe } from 'lucide-react';
+import Header from './components/Header';
 import UserBookingFlow from './components/UserBookingFlow';
 import AdminDashboard from './components/AdminDashboard';
 import {
@@ -13,9 +13,23 @@ import {
   setStoredData,
   initializeStorage
 } from './services/storage';
+import {
+  getLanguagePreference,
+  setLanguagePreference,
+  getThemePreference,
+  setThemePreference,
+  TRANSLATIONS
+} from './utils/translations';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('USER'); // 'USER' | 'ADMIN'
+  // Routing state based on window.location.pathname
+  const [route, setRoute] = useState(() => {
+    return window.location.pathname === '/admin' ? '/admin' : '/';
+  });
+
+  // Language & Theme states
+  const [lang, setLang] = useState(getLanguagePreference);
+  const [theme, setTheme] = useState(getThemePreference);
 
   // Admin Session State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => localStorage.getItem('mb_admin_authenticated') === 'true');
@@ -26,6 +40,24 @@ export default function App() {
   const [blockedDates, setBlockedDates] = useState([]);
   const [googleCalendar, setGoogleCalendar] = useState(INITIAL_GOOGLE_CALENDAR);
   const [bookings, setBookings] = useState([]);
+
+  // Sync theme with HTML document root class
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  // Sync route on popstate (browser back/forward)
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(window.location.pathname === '/admin' ? '/admin' : '/');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Initialize and Load Data
   useEffect(() => {
@@ -39,9 +71,25 @@ export default function App() {
     // Check for Google OAuth callback URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('google_connected') === 'true') {
-      setCurrentView('ADMIN');
+      navigate('/admin');
     }
   }, []);
+
+  const navigate = (newPath) => {
+    window.history.pushState({}, '', newPath);
+    setRoute(newPath === '/admin' ? '/admin' : '/');
+  };
+
+  const handleLanguageChange = (newLang) => {
+    setLang(newLang);
+    setLanguagePreference(newLang);
+  };
+
+  const handleThemeToggle = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    setThemePreference(nextTheme);
+  };
 
   const handleAdminLogin = (email) => {
     setIsAdminAuthenticated(true);
@@ -89,49 +137,23 @@ export default function App() {
     setStoredData(STORAGE_KEYS.GOOGLE_CALENDAR, updatedGCal);
   };
 
-  return (
-    <div className="min-h-screen bg-mb-dark text-mb-white flex flex-col justify-between selection:bg-mb-blue selection:text-white">
-      {/* Top Main Navigation Header */}
-      <header className="border-b border-mb-border bg-mb-dark/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-mb-blue flex items-center justify-center font-black text-white text-lg shadow-lg shadow-mb-blue/20">
-              MB
-            </div>
-            <div>
-              <h1 className="font-bold text-lg leading-none tracking-tight text-mb-white">MB GLOBAL</h1>
-              <p className="text-xs text-mb-textMuted tracking-wider uppercase font-medium mt-0.5">Appointment Portal</p>
-            </div>
-          </div>
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.EN;
 
-          <div className="flex items-center gap-2 bg-mb-surface p-1 rounded-xl border border-mb-border">
-            <button
-              onClick={() => setCurrentView('USER')}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-                currentView === 'USER'
-                  ? 'bg-mb-blue text-white shadow-md'
-                  : 'text-mb-textMuted hover:text-white'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" /> Client View
-            </button>
-            <button
-              onClick={() => setCurrentView('ADMIN')}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-                currentView === 'ADMIN'
-                  ? 'bg-mb-blue text-white shadow-md'
-                  : 'text-mb-textMuted hover:text-white'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" /> Admin Dashboard
-            </button>
-          </div>
-        </div>
-      </header>
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-mb-dark text-slate-900 dark:text-mb-white flex flex-col justify-between transition-colors duration-200 selection:bg-mb-blue selection:text-white">
+      {/* Navigation Header */}
+      <Header
+        lang={lang}
+        onLanguageChange={handleLanguageChange}
+        theme={theme}
+        onThemeToggle={handleThemeToggle}
+        route={route}
+        onNavigate={navigate}
+      />
 
       {/* Main App Content Body */}
       <main className="flex-grow py-6">
-        {currentView === 'USER' ? (
+        {route === '/' ? (
           <UserBookingFlow
             meetingTypes={meetingTypes}
             workingHours={workingHours}
@@ -139,6 +161,7 @@ export default function App() {
             bookings={bookings}
             onCreateBooking={handleCreateBooking}
             onUpdateBookingStatus={handleUpdateBookingStatus}
+            lang={lang}
           />
         ) : (
           <AdminDashboard
@@ -155,18 +178,16 @@ export default function App() {
             isAdminAuthenticated={isAdminAuthenticated}
             onAdminLogin={handleAdminLogin}
             onAdminLogout={handleAdminLogout}
+            lang={lang}
           />
         )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-mb-border bg-mb-surface/30 py-6 text-center text-xs text-mb-textMuted">
+      <footer className="border-t border-slate-200 dark:border-mb-border bg-white dark:bg-mb-surface/30 py-6 text-center text-xs dark:text-mb-textMuted text-slate-500 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-mb-blue" />
-            <span>&copy; {new Date().getFullYear()} MB Global. All rights reserved.</span>
-          </div>
-          <p>Powered by MB Global Appointment System &bull; Brand Palette #12141e, #3878bc, #ffffff</p>
+          <span>&copy; {new Date().getFullYear()} {t.allRightsReserved}</span>
+          <p>MB Global &bull; {t.slogan}</p>
         </div>
       </footer>
     </div>
