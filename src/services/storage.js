@@ -58,26 +58,14 @@ export const INITIAL_BLOCKED_DATES = [
 ];
 
 export const INITIAL_GOOGLE_CALENDAR = {
-  connected: true,
-  accountEmail: 'admin@mbglobal.com',
+  connected: false,
+  accountEmail: '',
   primaryCalendarId: 'primary',
   autoAddMeetLink: true,
-  syncStatus: 'synced',
+  syncStatus: 'disconnected',
   lastSyncedAt: new Date().toISOString(),
-  accessToken: 'ya29.a0AfH6SMB_GLOBAL_SECURE_ACCESS_TOKEN',
-  refreshToken: '1//0gMB_GLOBAL_SECURE_REFRESH_TOKEN',
-  tokenExpiresAt: new Date(Date.now() + 3600000).toISOString(),
   redirectUri: 'https://work-try-ons.vercel.app/api/google/oauth/callback',
-  calendarEvents: [
-    {
-      id: 'gcal-evt-901',
-      summary: 'MB Global Executive Strategy Review',
-      start: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T11:00:00',
-      end: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T12:00:00',
-      timezone: 'Africa/Dar_es_Salaam',
-      attendees: [{ email: 'admin@mbglobal.com' }]
-    }
-  ]
+  calendarEvents: []
 };
 
 export const INITIAL_BOOKINGS = [

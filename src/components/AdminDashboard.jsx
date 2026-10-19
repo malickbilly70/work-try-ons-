@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus, Trash2, Edit2, Clock, Calendar, Lock, Download, Check,
-  X, RefreshCw, CheckCircle2, AlertCircle, Link2, Search, Filter, Shield, Globe
+  X, RefreshCw, CheckCircle2, AlertCircle, Link2, Search, Filter, Globe
 } from 'lucide-react';
 import { formatTimeSlot } from '../utils/scheduler';
 
@@ -38,6 +38,79 @@ export default function AdminDashboard({
   // Google Calendar simulator/API test status
   const [isSyncing, setIsSyncing] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [serverConnection, setServerConnection] = useState({
+    loading: true,
+    connected: false,
+    accountEmail: null,
+  });
+
+  // Fetch real Google OAuth connection status from backend on mount and when google_connected query param is present
+  useEffect(() => {
+    fetchServerConnectionStatus();
+  }, []);
+
+  const fetchServerConnectionStatus = async () => {
+    try {
+      setServerConnection(prev => ({ ...prev, loading: true }));
+      const response = await fetch('/api/google/oauth/status');
+      if (response.ok) {
+        const data = await response.json();
+        setServerConnection({
+          loading: false,
+          connected: !!data.connected,
+          accountEmail: data.accountEmail || (data.connected ? 'admin@mbglobal.com' : null),
+        });
+        if (data.connected) {
+          onSaveGoogleCalendar({
+            ...googleCalendar,
+            connected: true,
+            accountEmail: data.accountEmail || 'admin@mbglobal.com',
+            syncStatus: 'synced',
+            lastSyncedAt: data.lastSyncedAt || new Date().toISOString()
+          });
+        }
+      } else {
+        setServerConnection({
+          loading: false,
+          connected: googleCalendar.connected,
+          accountEmail: googleCalendar.accountEmail,
+        });
+      }
+    } catch (err) {
+      setServerConnection({
+        loading: false,
+        connected: googleCalendar.connected,
+        accountEmail: googleCalendar.accountEmail,
+      });
+    }
+  };
+
+  // Trigger Google OAuth 2.0 Connect Flow via server route
+  const handleConnectGoogleOAuth = () => {
+    window.location.href = '/api/google/oauth/start';
+  };
+
+  // Disconnect Google OAuth via server route
+  const handleDisconnectGoogleOAuth = async () => {
+    if (!confirm('Are you sure you want to disconnect Google Calendar?')) return;
+    try {
+      await fetch('/api/google/oauth/disconnect', { method: 'POST' });
+    } catch (err) {
+      console.error('Error sending disconnect request:', err);
+    } finally {
+      onSaveGoogleCalendar({
+        ...googleCalendar,
+        connected: false,
+        accountEmail: '',
+        syncStatus: 'disconnected'
+      });
+      setServerConnection({
+        loading: false,
+        connected: false,
+        accountEmail: null
+      });
+    }
+  };
 
   // Filtered Bookings
   const filteredBookings = bookings.filter((b) => {
@@ -145,30 +218,6 @@ export default function AdminDashboard({
     alert('Working hours and slot intervals updated successfully!');
   };
 
-  // Trigger Google OAuth 2.0 Connect Flow to exact endpoint
-  const handleConnectGoogleOAuth = () => {
-    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'your-google-client-id.apps.googleusercontent.com';
-    const redirectUri = encodeURIComponent('https://work-try-ons.vercel.app/api/google/oauth/callback');
-    const scope = encodeURIComponent('openid email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events');
-
-    // Construct Google OAuth 2.0 authorization URL
-    const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=${scope}&access_type=offline&prompt=consent`;
-
-    if (googleClientId.includes('your-google-client-id')) {
-      // Connect in secure production environment mode
-      onSaveGoogleCalendar({
-        ...googleCalendar,
-        connected: true,
-        accountEmail: 'admin@mbglobal.com',
-        syncStatus: 'synced',
-        lastSyncedAt: new Date().toISOString()
-      });
-      alert('Connected to Google Calendar OAuth successfully! (Redirect URI: https://work-try-ons.vercel.app/api/google/oauth/callback)');
-    } else {
-      window.location.href = oauthUrl;
-    }
-  };
-
   // Test Live Google Calendar Connection
   const handleTestCalendarConnection = async () => {
     setIsSyncing(true);
@@ -197,21 +246,17 @@ export default function AdminDashboard({
         });
       }
     } catch (err) {
-      // Fallback for dev mode preview
       setTestResult({
-        success: true,
-        message: 'Successfully connected to Google Calendar API (Calendar ID: primary). Timezone: Africa/Dar_es_Salaam. Callback Route: https://work-try-ons.vercel.app/api/google/oauth/callback',
-      });
-      onSaveGoogleCalendar({
-        ...googleCalendar,
-        connected: true,
-        lastSyncedAt: new Date().toISOString(),
-        syncStatus: 'synced'
+        success: false,
+        message: 'Error verifying Google Calendar connection: ' + err.message,
       });
     } finally {
       setIsSyncing(false);
     }
   };
+
+  const isConnected = serverConnection.connected || googleCalendar.connected;
+  const currentEmail = serverConnection.accountEmail || googleCalendar.accountEmail || 'Not Connected';
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-4">
@@ -634,15 +679,15 @@ export default function AdminDashboard({
             <div className="flex justify-between items-center">
               <span className="text-sm text-mb-textMuted">OAuth Connection Status</span>
               <span className={`px-2.5 py-0.5 rounded text-xs font-semibold flex items-center gap-1 ${
-                googleCalendar.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                isConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
               }`}>
-                <CheckCircle2 className="w-3 h-3" /> {googleCalendar.connected ? 'Connected' : 'Disconnected'}
+                <CheckCircle2 className="w-3 h-3" /> {isConnected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
 
             <div className="flex justify-between items-center text-sm">
               <span className="text-mb-textMuted">Connected Google Account:</span>
-              <span className="font-medium text-mb-white">{googleCalendar.connected ? googleCalendar.accountEmail : 'Not Connected'}</span>
+              <span className="font-medium text-mb-white">{isConnected ? currentEmail : 'Not Connected'}</span>
             </div>
 
             <div className="flex justify-between items-center text-sm">
@@ -683,26 +728,22 @@ export default function AdminDashboard({
           <div className="flex justify-between items-center pt-4 border-t border-mb-border">
             <button
               onClick={() => {
-                if (googleCalendar.connected) {
-                  onSaveGoogleCalendar({
-                    ...googleCalendar,
-                    connected: false,
-                    accountEmail: 'Disconnected'
-                  });
+                if (isConnected) {
+                  handleDisconnectGoogleOAuth();
                 } else {
                   handleConnectGoogleOAuth();
                 }
               }}
               className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
-                googleCalendar.connected ? 'bg-red-950/40 text-red-400 border border-red-800 hover:bg-red-900/50' : 'bg-mb-blue hover:bg-mb-accentHover text-white'
+                isConnected ? 'bg-red-950/40 text-red-400 border border-red-800 hover:bg-red-900/50' : 'bg-mb-blue hover:bg-mb-accentHover text-white'
               }`}
             >
-              {googleCalendar.connected ? 'Disconnect Google Calendar' : 'Connect Google Calendar'}
+              {isConnected ? 'Disconnect Google Calendar' : 'Connect Google Calendar'}
             </button>
 
             <button
               onClick={handleTestCalendarConnection}
-              disabled={isSyncing || !googleCalendar.connected}
+              disabled={isSyncing || !isConnected}
               className="bg-mb-blue hover:bg-mb-accentHover disabled:opacity-50 text-white px-5 py-2 rounded-lg text-xs font-medium transition flex items-center gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />

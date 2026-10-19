@@ -32,6 +32,12 @@ export default function App() {
     setBlockedDates(getStoredData(STORAGE_KEYS.BLOCKED_DATES, INITIAL_BLOCKED_DATES));
     setGoogleCalendar(getStoredData(STORAGE_KEYS.GOOGLE_CALENDAR, INITIAL_GOOGLE_CALENDAR));
     setBookings(getStoredData(STORAGE_KEYS.BOOKINGS, INITIAL_BOOKINGS));
+
+    // Check for Google OAuth callback URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('google_connected') === 'true') {
+      setCurrentView('ADMIN');
+    }
   }, []);
 
   // Handlers for User Flow
